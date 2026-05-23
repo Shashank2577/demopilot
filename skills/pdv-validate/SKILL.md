@@ -97,9 +97,10 @@ gemini --version 2>/dev/null && which gemini || echo "MISSING (optional): instal
 npx impeccable --version 2>/dev/null || echo "MISSING (optional)"
 ```
 
-### 11. ACE-Step music (optional)
+### 11. ACE-Step music (informational only — ffmpeg fallback always used)
 ```bash
-acemusic --version 2>/dev/null || python3 -c "import ace_step; print('ace_step OK')" 2>/dev/null || echo "NOT FOUND (optional)"
+# acestep is a Gradio web UI, not a CLI generator — ffmpeg ambient track is always used instead
+echo "Music: ffmpeg ambient fallback (no acemusic CLI available)"
 ```
 
 ### 12. Remotion peer dependencies (required for render)

@@ -74,23 +74,20 @@ const ring = spring({ frame: frame - 20, fps, config: THEME.spring });
 ```
 Replace X,Y with confirmed pixel coordinates from Phase 1 WebBridge evaluate.
 
-## ACE-Step Music
+## Music Generation
 
-```bash
-pip install acemusic
-acemusic generate --preset tension      --duration 20  --output projects/PRODUCT/public/music/01-hook.mp3
-acemusic generate --preset tension      --duration 30  --output projects/PRODUCT/public/music/02-problem.mp3
-acemusic generate --preset hopeful      --duration 120 --output projects/PRODUCT/public/music/04-tour.mp3
-acemusic generate --preset corporate-bg --duration 20  --output projects/PRODUCT/public/music/06-stats.mp3
-acemusic generate --preset cta          --duration 10  --output projects/PRODUCT/public/music/08-cta.mp3
-```
+ACE-Step (`acestep`) is a Gradio web UI — it has no CLI generation flags. Always use the ffmpeg fallback.
 
-**Fallback (ffmpeg — no API needed):**
+**Music (ffmpeg — always used):**
 ```bash
-ffmpeg -f lavfi -i "sine=frequency=55:duration=180" -f lavfi -i "sine=frequency=82:duration=180" \
+# Generate ambient background track for full video duration
+TOTAL_S=180  # replace with actual total from config.ts
+ffmpeg -f lavfi -i "sine=frequency=55:duration=${TOTAL_S}" -f lavfi -i "sine=frequency=82:duration=${TOTAL_S}" \
   -filter_complex "[0]volume=0.08,aecho=0.6:0.4:800:0.3[a];[1]volume=0.05[b];[a][b]amix=inputs=2,lowpass=f=400[out]" \
   -map "[out]" -ar 44100 -ac 2 projects/PRODUCT/public/music/bg.mp3 -y
 ```
+
+Use `volume={0.06}` on the `<Audio>` component in Remotion to keep music under narration.
 
 ## Voicebox (primary narration)
 

@@ -141,38 +141,31 @@ If exit code 1: show table, ask user which resolution to apply per scene, then r
 
 ## STEP 4 — Generate Music
 
-Read `config.ts` for actual scene durations. Never hardcode durations.
+Read `config.ts` for actual total frame count. Never hardcode durations.
 
 ```bash
-python3 - << 'EOF'
-import subprocess, json, os
+mkdir -p projects/{productname}/public/music
 
-# Read actual durations from config.ts
-# Parse SCENE_DURATIONS and MUSIC_PRESETS from config.ts
-# Group scenes by music preset, sum durations per group
+# Compute total video duration from config.ts TOTAL_FRAMES
+TOTAL_S=$(python3 -c "
+import re
+d = open('projects/{productname}/config.ts').read()
+m = re.search(r'TOTAL_FRAMES\s*=\s*(\d+)', d)
+frames = int(m.group(1)) if m else sum(int(x) for x in re.findall(r':\s*(\d+)', d) if 100 < int(x) < 3000)
+print(frames // 30 + 10)
+")
 
-config = open("projects/{productname}/config.ts").read()
-# (agent extracts SCENE_DURATIONS dict and music preset per scene from config.ts)
-# Example result: { "tension": 45, "hopeful": 60, "corporate-bg": 40, "cta": 20 }
+echo "Generating ${TOTAL_S}s ambient music track..."
 
-os.makedirs("projects/{productname}/public/music", exist_ok=True)
-EOF
+{FFMPEG} -f lavfi -i "sine=frequency=55:duration=${TOTAL_S}" \
+  -f lavfi -i "sine=frequency=82:duration=${TOTAL_S}" \
+  -filter_complex "[0]volume=0.08,aecho=0.6:0.4:800:0.3[a];[1]volume=0.05[b];[a][b]amix=inputs=2,lowpass=f=400[out]" \
+  -map "[out]" -ar 44100 -ac 2 projects/{productname}/public/music/bg.mp3 -y
 
-# Generate with ACE-Step if available, else ffmpeg fallback
-if command -v acemusic &>/dev/null; then
-  # Agent fills in actual durations from config.ts above
-  acemusic generate --preset tension      --duration {tension_total_s}      --output projects/{productname}/public/music/tension.mp3
-  acemusic generate --preset hopeful      --duration {hopeful_total_s}      --output projects/{productname}/public/music/hopeful.mp3
-  acemusic generate --preset corporate-bg --duration {corporate_total_s}    --output projects/{productname}/public/music/corporate-bg.mp3
-  acemusic generate --preset cta          --duration {cta_total_s}          --output projects/{productname}/public/music/cta.mp3
-else
-  # ffmpeg fallback — one ambient track for full video duration
-  TOTAL_S=$(python3 -c "import re; d=open('projects/{productname}/config.ts').read(); frames=sum(int(x) for x in re.findall(r':\s*(\d+)',d) if 100<int(x)<3000); print(frames//30+10)")
-  {FFMPEG} -f lavfi -i "sine=frequency=55:duration=${TOTAL_S}" -f lavfi -i "sine=frequency=82:duration=${TOTAL_S}" \
-    -filter_complex "[0]volume=0.08,aecho=0.6:0.4:800:0.3[a];[1]volume=0.05[b];[a][b]amix=inputs=2,lowpass=f=400[out]" \
-    -map "[out]" -ar 44100 -ac 2 projects/{productname}/public/music/bg.mp3 -y
-fi
+echo "Music generated: projects/{productname}/public/music/bg.mp3 (${TOTAL_S}s)"
 ```
+
+In Remotion Root.tsx use `<Audio src={staticFile('music/bg.mp3')} volume={0.06} />` — keeps music under narration.
 
 ---
 
