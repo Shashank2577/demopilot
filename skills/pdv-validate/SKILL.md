@@ -102,6 +102,23 @@ npx impeccable --version 2>/dev/null || echo "MISSING (optional)"
 acemusic --version 2>/dev/null || python3 -c "import ace_step; print('ace_step OK')" 2>/dev/null || echo "NOT FOUND (optional)"
 ```
 
+### 12. Remotion peer dependencies (required for render)
+```bash
+# culori must be present — webpack fails silently without it (exit code 0, video not produced)
+node -e "require('culori'); console.log('culori OK')" 2>/dev/null \
+  && echo "culori: found in node_modules" \
+  || (cd projects/{productname} && npm install culori 2>/dev/null && echo "culori: installed" || echo "WARNING: install culori in projects/{productname} before render")
+```
+
+### 13. Auth state (if app requires login)
+```bash
+ls projects/{productname}/scripts/auth-state.json 2>/dev/null \
+  && echo "auth-state.json: exists" \
+  || echo "INFO: no auth-state.json — run Playwright codegen if app requires login"
+```
+
+**Auth state validity is NOT checked here** — it is checked live in pdv-render Step 1 by navigating to the app and confirming the page title is not a login/sign-in page.
+
 ---
 
 ## Write toolchain.json
@@ -172,9 +189,10 @@ code{background:#1a1a1a;padding:2px 6px;border-radius:3px;font-size:12px}
 </body></html>
 ```
 
-**Required** (video won't work without): node, python3, ffmpeg, ffprobe, playwright
+**Required** (video won't work without): node, python3, ffmpeg, ffprobe, playwright, culori (installed in project)
 **Recommended** (significantly better results): voicebox OR edge-tts, webbridge, gemini, impeccable
 **Optional** (graceful fallbacks): acemusic
+**Informational** (check exists, validity confirmed at render time): auth-state.json
 
 Open report in browser. If any required tool is missing, stop and tell user exactly what to install.
 If narration_strategy is `none`, warn prominently — the video will render silent.

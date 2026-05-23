@@ -41,6 +41,32 @@ If missing and app requires login, stop and tell user:
 "Run the browser auth setup first: open the app in Chrome, log in, then run:
 `npx playwright codegen --save-storage=projects/{productname}/scripts/auth-state.json {AppURL}`"
 
+If auth-state.json exists, **validate it is still active** — the file can be expired or invalidated by a new session without its size changing:
+
+```bash
+# Navigate to app with stored auth — check the resulting page title
+# A redirect to login means the auth state is stale
+node -e "
+const { chromium } = require('playwright');
+(async () => {
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext({ storageState: 'projects/{productname}/scripts/auth-state.json' });
+  const page = await ctx.newPage();
+  await page.goto('{AppURL}', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  const title = await page.title();
+  const url = page.url();
+  console.log('title:', title, 'url:', url);
+  const isLoginPage = /sign.?in|log.?in|auth|login/i.test(title) || /sign.?in|log.?in|auth|login/i.test(url);
+  if (isLoginPage) { console.error('AUTH_EXPIRED'); process.exit(1); }
+  console.log('AUTH_VALID');
+  await browser.close();
+})();
+" 2>&1
+```
+
+If output contains `AUTH_EXPIRED`, stop:
+"auth-state.json is stale — re-run: `npx playwright codegen --save-storage=projects/{productname}/scripts/auth-state.json {AppURL}` then log in."
+
 If public app (no auth required), continue.
 
 ---

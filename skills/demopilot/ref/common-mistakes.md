@@ -18,3 +18,8 @@
 | Claude context compaction corrupting scenes | Use Gemini for bulk TSX generation |
 | Files not namespaced by product | All paths under `projects/ProductName/` |
 | Phase 1 screenshots filling main context | Delegate to Explore subagent — returns findings.md only |
+| `fs.rmdirSync` in recording pipeline (Node ≥ 16) | Use `fs.rmSync(path, { recursive: true, force: true })` |
+| culori missing — webpack fails silently, exit code 0 | Run `npm install culori` in project root before first render |
+| Recording TSX references wrong filename | Format is always `{scene_id}-{name}.mp4` e.g. `scene04-commits.mp4` |
+| React early return before hook calls — frame 60 crash | Move ALL hook calls (useCurrentFrame, spring, interpolate) ABOVE any conditional return |
+| auth-state.json exists but Clerk/SSO redirects to login | auth-state.json can expire — validate by navigating to dashboard and checking page title ≠ "Sign In" |

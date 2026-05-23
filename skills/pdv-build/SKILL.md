@@ -174,7 +174,19 @@ gemini -p "@projects/{productname}/src/theme.ts \
   - Use TransitionSeries with fade() transitions between scenes (20 frames each)
   - Ken Burns on every OffthreadVideo: const scale = 1 + useCurrentFrame() * 0.0002
   - Frame counts come from config.ts SCENE_DURATIONS — never hardcode durations
-  - React hooks: never call conditionally or inside loops
+
+  REACT HOOKS — CRITICAL (violating this causes a frame 60 crash):
+  - Call ALL hooks (useCurrentFrame, useVideoConfig, spring, interpolate) at the TOP of the component, BEFORE any conditional logic
+  - NEVER place a hook call after an early return, inside an if block, or inside a loop
+  - NEVER use early returns to guard rendering — use conditional JSX (ternary or &&) AFTER all hooks are called
+  - Pattern: const frame = useCurrentFrame(); const opacity = spring({...}); return condition ? <A/> : <B/>;
+  - Anti-pattern: if (!data) return null; const frame = useCurrentFrame(); ← CRASHES
+
+  RECORDING FILENAMES:
+  - OffthreadVideo src must use the exact filename the recording script produces
+  - Format: staticFile('recordings/{scene_id}-{page_name}.mp4') — e.g. staticFile('recordings/scene04-commits.mp4')
+  - scene_id comes from approved.md (e.g. scene04). page_name is the URL slug.
+  - NEVER omit the scene_id prefix — staticFile('recordings/commits.mp4') is WRONG
 
   Output each as a complete file: src/scenes/SceneNN{Name}.tsx"
 ```
@@ -195,6 +207,9 @@ all scenes consistently, issues will be systematic not isolated.
 ---
 
 ## PHASE 4C — Playwright Recording Scripts (Sonnet)
+
+**Filename rule:** Recording output must be named `{scene_id}-{page_name}.mp4` — e.g. `scene04-commits.mp4`.
+The TSX `staticFile('recordings/scene04-commits.mp4')` must match this exactly.
 
 For each screen-recording scene in approved.md, write `projects/{productname}/scripts/record-{scene}.ts`:
 
