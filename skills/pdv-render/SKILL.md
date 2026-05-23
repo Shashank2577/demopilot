@@ -1,154 +1,214 @@
 ---
 name: pdv-render
-description: "Use as Step 4 (final step) of DemoPilot after reviewing phase2-report.html. Generates narration audio, per-scene music, runs recordings, renders the final video, exports all formats, and produces a quality report. Always the last command in the pipeline."
+description: "Use as Step 4 (final step) of DemoPilot after reviewing phase2-report.html. Runs Playwright recordings, sync-checks timing, generates music, renders final video in all formats, produces phase3-report.html."
 argument-hint: "[ProductName] — e.g. 'OBSERVE'"
 ---
 
 # DemoPilot — Step 4: Render
 
-**Bash execution: Haiku** | **Quality review pass: Sonnet**
+**Model: Haiku** (bash execution) | **Quality gate: Sonnet**
 
-## Setup
+## Setup — Read State First
+
+```bash
+cat projects/{productname}/.demopilot-state
+cat projects/{productname}/toolchain.json
+```
+
+If `phase_completed` is not `build`: stop — "Run `/pdv-build \"{ProductName}\"` first."
+If `toolchain.json` is missing: stop — "Run `/pdv-validate \"{ProductName}\"` first."
 
 ```
-ProductName = argument (e.g. "OBSERVE")
-ProjectRoot = "projects/{productname}/"
-Read: ProjectRoot/storyboard/approved.md   (narration texts)
-Read: ProjectRoot/config.ts               (scene list)
+ProductName  = argument
+ProjectRoot  = projects/{productname}/
+FFMPEG       = toolchain.json → ffmpeg
+FFPROBE      = toolchain.json → ffprobe
 ```
+
+Read `ProjectRoot/config.ts` — scene list and locked frame counts.
 
 ---
 
-## PHASE 4C — Generate Narration
-
-**Try Voicebox first. Fall back to Qwen3-TTS, then edge-tts.**
+## STEP 1 — Auth Check
 
 ```bash
-# Check which TTS is available
-if curl -s --max-time 2 http://127.0.0.1:17493/profiles > /dev/null 2>&1; then
-  TTS_ENGINE="voicebox"
-elif python3 -c "import qwen_tts" 2>/dev/null; then
-  TTS_ENGINE="qwen3"
-else
-  TTS_ENGINE="edge-tts"
-fi
-echo "Using: $TTS_ENGINE"
+ls projects/{productname}/scripts/auth-state.json 2>/dev/null \
+  && echo "auth-state.json found" \
+  || echo "WARNING: auth-state.json missing — recordings will fail on auth-gated pages"
 ```
 
-For each scene in the storyboard, generate narration:
+If missing and app requires login, stop and tell user:
+"Run the browser auth setup first: open the app in Chrome, log in, then run:
+`npx playwright codegen --save-storage=projects/{productname}/scripts/auth-state.json {AppURL}`"
 
-**Voicebox:**
-```bash
-gen_id=$(curl -s -X POST http://127.0.0.1:17493/generate \
-  -H "Content-Type: application/json" \
-  -d "{\"text\":\"{NARRATION_TEXT}\",\"profile_id\":\"{PROFILE_UUID}\",\"engine\":\"kokoro\"}" \
-  | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
-VOICEBOX_DIR="$HOME/Library/Application Support/sh.voicebox.app/generations"
-for i in $(seq 1 30); do
-  [ -f "$VOICEBOX_DIR/${gen_id}.wav" ] && cp "$VOICEBOX_DIR/${gen_id}.wav" {ProjectRoot}/public/narration/{scene}.wav && break
-  sleep 1
-done
-```
-
-**Qwen3-TTS fallback:**
-```bash
-python3 -m qwen_tts "{NARRATION_TEXT}" --speaker Chelsie \
-  --instruct "Calm confidence. Slower on numbers and key terms." \
-  --output {ProjectRoot}/public/narration/{scene}.wav
-```
-
-**edge-tts fallback:**
-```bash
-edge-tts --voice en-US-AriaNeural --text "{NARRATION_TEXT}" \
-  --write-media {ProjectRoot}/public/narration/{scene}.wav
-```
-
-**CRITICAL — verify every WAV duration:**
-```bash
-for f in {ProjectRoot}/public/narration/*.wav; do
-  dur=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "$f")
-  frames=$(python3 -c "import math; print(math.ceil($dur * 30) + 45)")
-  echo "$(basename $f): ${dur}s → min ${frames} frames"
-done
-```
-
-Update `durationInFrames` in each scene component to match actual WAV duration. Never use target duration.
+If public app (no auth required), continue.
 
 ---
 
-## PHASE 4D — Generate Music
+## STEP 2 — Run Screen Recordings
 
 ```bash
-if command -v acemusic &>/dev/null; then
-  acemusic generate --preset tension      --duration 20  --output {ProjectRoot}/public/music/01-hook.mp3
-  acemusic generate --preset tension      --duration 30  --output {ProjectRoot}/public/music/02-problem.mp3
-  acemusic generate --preset hopeful      --duration 120 --output {ProjectRoot}/public/music/04-tour.mp3
-  acemusic generate --preset corporate-bg --duration 20  --output {ProjectRoot}/public/music/06-stats.mp3
-  acemusic generate --preset cta          --duration 10  --output {ProjectRoot}/public/music/08-cta.mp3
-else
-  # ffmpeg fallback — no API needed
-  ffmpeg -f lavfi -i "sine=frequency=55:duration=300" -f lavfi -i "sine=frequency=82:duration=300" \
-    -filter_complex "[0]volume=0.08,aecho=0.6:0.4:800:0.3[a];[1]volume=0.05[b];[a][b]amix=inputs=2,lowpass=f=400[out]" \
-    -map "[out]" -ar 44100 -ac 2 {ProjectRoot}/public/music/bg.mp3 -y
-fi
-```
+cd projects/{productname}
 
----
-
-## PHASE 4B — Run Screen Recordings
-
-```bash
-cd {ProjectRoot}
-
-# Record each scene
+# Run recordings with auth state if available
 npx ts-node ../../../pipeline/bin/pipeline.ts --phase record --product "{ProductName}"
 
-# Process (crop, compress)
-npx ts-node ../../../pipeline/bin/pipeline.ts --phase process --product "{ProductName}"
-
-# Verify recordings exist + have duration
+# Verify all recordings exist and have duration > 0
+echo "=== RECORDING VERIFICATION ==="
 for f in public/recordings/*.mp4; do
-  dur=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "$f")
-  echo "$(basename $f): ${dur}s"
+  dur=$({FFPROBE} -v quiet -show_entries format=duration -of csv=p=0 "$f" 2>/dev/null)
+  [ -z "$dur" ] && echo "MISSING/BROKEN: $f" || echo "OK $(basename $f): ${dur}s"
 done
+```
+
+If any recording is missing or 0 bytes, stop — report which scenes failed, do not continue to render.
+
+---
+
+## STEP 3 — Sync Check (recordings vs narration)
+
+**Run after recordings exist. Never skip.**
+
+```bash
+python3 - << 'EOF'
+import subprocess, glob, os, sys
+
+def dur(path):
+    r = subprocess.run(
+        ["{FFPROBE}","-v","quiet","-show_entries","format=duration","-of","csv=p=0",path],
+        capture_output=True, text=True
+    )
+    return float(r.stdout.strip()) if r.stdout.strip() else None
+
+nar_dir  = "projects/{productname}/public/narration"
+rec_dir  = "projects/{productname}/public/recordings"
+mismatches = []
+
+for nar_file in sorted(glob.glob(f"{nar_dir}/scene*.mp3")):
+    scene_id = os.path.basename(nar_file).replace(".mp3","")
+    recs = glob.glob(f"{rec_dir}/{scene_id}*.mp4")
+    if not recs:
+        continue  # motion-graphic scene — no recording expected
+
+    nar_s = dur(nar_file)
+    rec_s = dur(recs[0])
+    if nar_s and rec_s and rec_s < nar_s - 0.5:  # 0.5s tolerance
+        mismatches.append((scene_id, rec_s, nar_s, nar_s - rec_s))
+        print(f"MISMATCH {scene_id}: recording {rec_s:.1f}s < narration {nar_s:.1f}s (shortfall {nar_s-rec_s:.1f}s)")
+    else:
+        print(f"OK       {scene_id}: {rec_s:.1f}s rec >= {nar_s:.1f}s nar")
+
+if mismatches:
+    print(f"\n{len(mismatches)} mismatch(es). Fix options per scene:")
+    for sid, r, n, diff in mismatches:
+        print(f"  {sid}: extend recording by {diff:.1f}s (slow-motion or loop last frame) OR trim narration")
+    sys.exit(1)
+else:
+    print("\nSync check passed.")
+    sys.exit(0)
+EOF
+```
+
+If exit code 1: show table, ask user which resolution to apply per scene, then re-record or re-generate narration. Never render with known mismatches.
+
+---
+
+## STEP 4 — Generate Music
+
+Read `config.ts` for actual scene durations. Never hardcode durations.
+
+```bash
+python3 - << 'EOF'
+import subprocess, json, os
+
+# Read actual durations from config.ts
+# Parse SCENE_DURATIONS and MUSIC_PRESETS from config.ts
+# Group scenes by music preset, sum durations per group
+
+config = open("projects/{productname}/config.ts").read()
+# (agent extracts SCENE_DURATIONS dict and music preset per scene from config.ts)
+# Example result: { "tension": 45, "hopeful": 60, "corporate-bg": 40, "cta": 20 }
+
+os.makedirs("projects/{productname}/public/music", exist_ok=True)
+EOF
+
+# Generate with ACE-Step if available, else ffmpeg fallback
+if command -v acemusic &>/dev/null; then
+  # Agent fills in actual durations from config.ts above
+  acemusic generate --preset tension      --duration {tension_total_s}      --output projects/{productname}/public/music/tension.mp3
+  acemusic generate --preset hopeful      --duration {hopeful_total_s}      --output projects/{productname}/public/music/hopeful.mp3
+  acemusic generate --preset corporate-bg --duration {corporate_total_s}    --output projects/{productname}/public/music/corporate-bg.mp3
+  acemusic generate --preset cta          --duration {cta_total_s}          --output projects/{productname}/public/music/cta.mp3
+else
+  # ffmpeg fallback — one ambient track for full video duration
+  TOTAL_S=$(python3 -c "import re; d=open('projects/{productname}/config.ts').read(); frames=sum(int(x) for x in re.findall(r':\s*(\d+)',d) if 100<int(x)<3000); print(frames//30+10)")
+  {FFMPEG} -f lavfi -i "sine=frequency=55:duration=${TOTAL_S}" -f lavfi -i "sine=frequency=82:duration=${TOTAL_S}" \
+    -filter_complex "[0]volume=0.08,aecho=0.6:0.4:800:0.3[a];[1]volume=0.05[b];[a][b]amix=inputs=2,lowpass=f=400[out]" \
+    -map "[out]" -ar 44100 -ac 2 projects/{productname}/public/music/bg.mp3 -y
+fi
 ```
 
 ---
 
-## PHASE 5 — Quality Gate + Render
-
-**Switch to Sonnet for quality gate review.**
+## STEP 5 — Skip Narration (already done in pdv-build)
 
 ```bash
-cd {ProjectRoot}
-
-# Quality gate
-npx impeccable detect       # fail if anti-patterns found
-npx impeccable /animate     # motion audit
-npx impeccable /color       # contrast check
+# Verify narration exists — do NOT regenerate
+missing=0
+for f in projects/{productname}/public/narration/scene*.mp3; do
+  size=$(wc -c < "$f" 2>/dev/null || echo 0)
+  [ "$size" -lt 1000 ] && echo "WARNING: $f too small ($size bytes)" && missing=$((missing+1))
+done
+[ "$missing" -gt 0 ] && echo "Re-run /pdv-build to regenerate narration" && exit 1
+echo "Narration: all files present"
 ```
 
-Review impeccable output. Fix any blockers before rendering.
+---
 
-**Render:**
+## STEP 6 — Quality Gate
+
+**Switch to Sonnet.**
+
 ```bash
+cd projects/{productname}
+npx impeccable detect
+npx impeccable /animate
+npx impeccable /color
+```
+
+Review output. Fix any blockers. Switch back to Haiku for render.
+
+---
+
+## STEP 7 — Render
+
+```bash
+cd projects/{productname}
+
 # 16:9 main
-npx remotion render src/index.ts VideoComposition {ProjectRoot}/output/demo.mp4 \
+npx remotion render src/index.ts MainVideo output/demo.mp4 \
   --codec h264 --crf 18 --scale 1 --log verbose
 
-# 9:16 vertical (social)
-npx remotion render src/index.ts VideoComposition {ProjectRoot}/output/demo-9x16.mp4 \
+# 9:16 vertical
+npx remotion render src/index.ts MainVideo output/demo-9x16.mp4 \
   --width 1080 --height 1920 --codec h264
 
 # GIF preview (first 8s)
-ffmpeg -i {ProjectRoot}/output/demo.mp4 -t 8 \
+{FFMPEG} -i output/demo.mp4 -t 8 \
   -vf "fps=12,scale=800:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" \
-  {ProjectRoot}/output/demo-preview.gif -y
+  output/demo-preview.gif -y
 ```
+
+Verify output:
+```bash
+{FFPROBE} -v quiet -show_entries format=duration,size -of csv=p=0 output/demo.mp4
+```
+
+If render fails, check `--log verbose` output for the first error line. Common causes in `common-mistakes.md`.
 
 ---
 
-## Output: phase3-report.html
+## STEP 8 — phase3-report.html
 
 Write `projects/{productname}/output/phase3-report.html`:
 
@@ -158,33 +218,50 @@ Write `projects/{productname}/output/phase3-report.html`:
 <style>
 body{font-family:system-ui;max-width:900px;margin:40px auto;padding:0 20px;background:#0a0a0a;color:#f5f5f5}
 .ok{color:#22c55e}.warn{color:#f59e0b}.fail{color:#ef4444}
-.downloads{display:flex;gap:12px;margin:24px 0}
+.downloads{display:flex;gap:12px;margin:24px 0;flex-wrap:wrap}
 .btn{background:#18181b;border:1px solid #333;padding:10px 20px;border-radius:6px;color:#f5f5f5;text-decoration:none;font-size:14px}
-video{width:100%;border-radius:8px;margin:16px 0}
+video{width:100%;border-radius:8px;margin:16px 0;max-height:500px}
 table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #222;font-size:13px}
+th{color:#a1a1aa;font-weight:500}
+.badge{padding:2px 8px;border-radius:4px;font-size:12px}
 </style></head><body>
-
 <h1>DemoPilot Output — {ProductName}</h1>
+<p style="color:#71717a">{timestamp} · {total_s}s · {scene_count} scenes</p>
 
 <video controls src="demo.mp4"></video>
 
 <div class="downloads">
-  <a class="btn" href="demo.mp4">Download 16:9 MP4</a>
-  <a class="btn" href="demo-9x16.mp4">Download 9:16 MP4</a>
-  <a class="btn" href="demo-preview.gif">Download GIF</a>
+  <a class="btn" href="demo.mp4">⬇ 16:9 MP4</a>
+  <a class="btn" href="demo-9x16.mp4">⬇ 9:16 MP4</a>
+  <a class="btn" href="demo-preview.gif">⬇ GIF Preview</a>
 </div>
 
-<h2>Quality Gate</h2>
-<p class="{statusClass}">{impeccable summary}</p>
+<h2>Sync Check</h2>
+<table>
+<tr><th>Scene</th><th>Narration</th><th>Recording</th><th>Status</th></tr>
+{sync rows — one per recording scene}
+</table>
 
 <h2>Scene Timing</h2>
 <table>
-<tr><th>Scene</th><th>Target</th><th>Actual WAV</th><th>Frames</th><th>Status</th></tr>
-{timing rows}
+<tr><th>Scene</th><th>Frames</th><th>Duration</th><th>Music</th><th>Type</th></tr>
+{timing rows from config.ts}
 </table>
 
 </body></html>
 ```
 
-**Final message to user:**
-"Your demo is ready. Open `projects/{ProductName}/output/phase3-report.html` to preview and download all formats."
+Write state file `projects/{productname}/.demopilot-state`:
+```json
+{
+  "product": "{ProductName}",
+  "phase_completed": "render",
+  "next_command": null,
+  "output_mp4": "output/demo.mp4",
+  "output_vertical": "output/demo-9x16.mp4",
+  "output_gif": "output/demo-preview.gif",
+  "notes": "Render complete. {total_s}s video at output/demo.mp4"
+}
+```
+
+Tell user: "Your demo is ready. Open `projects/{productname}/output/phase3-report.html` to preview and download."
