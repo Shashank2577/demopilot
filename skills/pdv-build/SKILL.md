@@ -6,7 +6,7 @@ argument-hint: "[ProductName] — e.g. 'OBSERVE'"
 
 # DemoPilot — Step 3: Build
 
-**Storyboard: Opus** | **Remotion code: Gemini** | **Recording scripts: Sonnet** | **Quality review: design-taste-frontend**
+**Storyboard: Opus** | **Remotion code: Gemini** | **Recording scripts: Sonnet** | **Quality review: full design stack**
 
 ## Setup
 
@@ -18,7 +18,14 @@ Read: ProjectRoot/exploration/shotlist-approved.md
 Read: ProjectRoot/src/theme.ts
 ```
 
-Read `~/.claude/skills/demopilot/ref/visual-excellence.md` now — needed for this entire phase.
+**Read these before any frontend work:**
+- `~/.claude/skills/demopilot/ref/design-stack.md` — mandatory tool invocation rules
+- `~/.claude/skills/demopilot/ref/visual-excellence.md` — anti-slop + creative arsenal
+
+**Invoke the design stack now (before writing a single line of TSX):**
+1. `/design-taste-frontend` — set DESIGN_VARIANCE dial, review Creative Arsenal for each act
+2. `/emil-design-eng` — confirm animation craft standards (spring, stagger, easing)
+3. For each motion graphic scene: check Skiper UI before building anything custom
 
 ---
 
@@ -73,15 +80,17 @@ gemini -p "@projects/{productname}/src/theme.ts \
 
 Copy the output files to `projects/{productname}/src/scenes/`.
 
-**Run quality gate on each scene:**
+**Per-scene quality gate (mandatory for every scene, not just at the end):**
+1. `/design-taste-frontend` — anti-slop check against Creative Arsenal
+2. `/emil-design-eng` — animation craft review (spring, stagger, interruptibility)
+3. Skiper check — could any Skiper component replace custom code?
 ```bash
 cd projects/{productname}
-npx impeccable detect
+npx impeccable detect    # anti-patterns
+npx impeccable /animate  # motion audit
+npx impeccable /color    # contrast
 ```
-
-Fix any anti-patterns before moving to recording scripts.
-
-**Also invoke design-taste-frontend** skill for a quick anti-slop review of the scenes if available.
+Fix ALL issues before moving to the next scene. Never batch fixes at the end.
 
 ---
 
@@ -122,6 +131,10 @@ export const PROJECT_CONFIG = {
 ---
 
 ## Output: phase2-report.html
+
+**Present 3 storyboard opening directions** before the full scene list — the user picks one.
+Options should differ in narrative tone (e.g., Urgent vs Empathetic vs Confident), not just visual style.
+Use the `/design-taste-frontend` and `/emil-design-eng` skills to inform the motion character of each option.
 
 Write `projects/{productname}/storyboard/phase2-report.html`:
 
