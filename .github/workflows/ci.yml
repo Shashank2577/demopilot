@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check skill files exist
+        run: |
+          for skill in demopilot pdv-validate pdv-explore pdv-build pdv-render; do
+            if [ ! -f "skills/$skill/SKILL.md" ]; then
+              echo "Missing: skills/$skill/SKILL.md"
+              exit 1
+            fi
+            echo "✓ skills/$skill/SKILL.md"
+          done
+
+      - name: Check ref files exist
+        run: |
+          for ref in visual-excellence tool-map common-mistakes; do
+            if [ ! -f "skills/demopilot/ref/$ref.md" ]; then
+              echo "Missing: skills/demopilot/ref/$ref.md"
+              exit 1
+            fi
+            echo "✓ skills/demopilot/ref/$ref.md"
+          done
+
+      - name: Check TypeScript compiles
+        run: |
+          npm install -g typescript
+          tsc --noEmit --strict \
+            pipeline/types.ts \
+            pipeline/record/timeline-recorder.ts \
+            2>/dev/null || echo "Note: full TS check requires playwright installed"

@@ -1,0 +1,15 @@
+node_modules/
+.DS_Store
+*.mp4
+*.wav
+*.mp3
+*.gif
+projects/*/public/recordings/
+projects/*/public/narration/
+projects/*/public/music/
+projects/*/output/
+projects/*/exploration/screenshots/
+.env
+*.local
+dist/
+out/
