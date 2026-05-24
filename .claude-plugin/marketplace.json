@@ -1,13 +1,23 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "demopilot",
+  "metadata": {
+    "description": "DemoPilot — open-source demo video studio for founders. Real screen recordings with semantic zoom (OpenScreen), shadcn-style components, deterministic recording scripts.",
+    "version": "0.2.0"
+  },
   "owner": {
     "name": "Shashank Saxena"
   },
   "plugins": [
     {
       "name": "demopilot",
-      "source": ".",
-      "description": "DemoPilot — multi-skill demo video orchestrator (validate → explore → build → render)"
+      "description": "Multi-skill demo video orchestrator (validate → explore → build → render)",
+      "author": {
+        "name": "Shashank Saxena"
+      },
+      "source": "./",
+      "category": "productivity",
+      "homepage": "https://github.com/Shashank2577/demopilot"
     }
   ]
 }
