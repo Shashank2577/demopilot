@@ -1,0 +1,13 @@
+{
+  "name": "demopilot",
+  "owner": {
+    "name": "Shashank Saxena"
+  },
+  "plugins": [
+    {
+      "name": "demopilot",
+      "source": ".",
+      "description": "DemoPilot — multi-skill demo video orchestrator (validate → explore → build → render)"
+    }
+  ]
+}

@@ -1,32 +1,148 @@
 # Tool Map Reference
 
-## remotion-bits (PRIMARY animation library)
+## remotion-bits (PRIMARY animation library — shadcn-style installer)
+
+`remotion-bits` is NPM-installed but exposes a **CLI**, not runtime imports. The
+actual runtime components are FETCHED via the CLI and copied into the consuming
+project. NEVER `import { ... } from "remotion-bits"` — that import does not
+resolve at runtime.
+
+### Install the CLI
 
 ```bash
 npm install remotion-bits
 ```
 
-```tsx
-import { AnimatedText, Typewriter, GradientTransition, AnimatedNumber } from "remotion-bits";
+### CLI commands (verified via `--help`)
 
-// Hook — character stagger
-<AnimatedText text="..." split="char" staggerMs={THEME.stagger} animation="fadeUp" spring={THEME.spring} />
-
-// Stats — count-up
-<AnimatedNumber from={0} to={170} suffix="/day" duration={90} spring={THEME.spring} />
-
-// Typewriter
-<Typewriter text="Monitoring 847 services..." cursorChar="_" speedMs={40} />
-
-// Background gradient
-<GradientTransition from="#0a0a0a" to="#111827" />
+```
+remotion-bits find [query] [--query <text>] [--tag <tag>] [--limit <number>] [--json]
+remotion-bits fetch <id-or-name> [--json]
+remotion-bits mcp     # starts Remotion Bits MCP server on stdio
 ```
 
-**Adapting Skiper (replace scroll/hover with frame):**
+The MCP server mode exposes `find` / `fetch` over MCP — pdv-build can use this
+to search and fetch components on demand during scene generation.
+
+### Registry
+
+62 items total. Default install paths (from `registry.json`):
+- components → `src/components/`
+- utilities  → `src/utils/`
+- hooks      → `src/hooks/`
+- bits (examples) → `src/compositions/` (or docs path)
+
+Component IDs are kebab-case; files land in PascalCase. Sample catalog:
+
+| id (kebab) | file path |
+|------------|-----------|
+| `animated-text` | `src/components/AnimatedText.tsx` |
+| `animated-counter` | `src/components/AnimatedCounter.tsx` |
+| `type-writer` | `src/components/TypeWriter.tsx` |
+| `matrix-rain` | `src/components/MatrixRain.tsx` |
+| `gradient-transition` | `src/components/GradientTransition.tsx` |
+| `staggered-motion` | `src/components/StaggeredMotion.tsx` |
+| `code-block` | `src/components/CodeBlock.tsx` |
+| `particle-system` | `src/components/ParticleSystem/Particles.tsx` |
+| `scene-3d` | `src/components/Scene3D/Scene3D.tsx` |
+| `scrolling-columns` | `src/components/ScrollingImages.tsx` |
+
+The PascalCase export names are NOT predictable from the kebab id — discover
+them per-component via `fetch` (the returned source contains the actual
+`export` statement). Do not guess.
+
+### Usage recipe (per component, per scene)
+
+```bash
+cd projects/PRODUCT
+
+# 1. Discover/confirm the component
+npx remotion-bits find "typewriter" --json
+
+# 2. Fetch its source (returns JSON with file path + source code)
+npx remotion-bits fetch animated-text --json
+
+# 3. Write the returned source to its registry-declared path
+#    (e.g. src/components/AnimatedText.tsx)
+
+# 4. Import locally
+```
+
+```tsx
+import { AnimatedText } from "@/components/AnimatedText";
+// Props/signature: read from the fetched source — do not guess
+```
+
+### Adapting external animation patterns to Remotion frames
+
+Replace scroll/hover triggers with `useCurrentFrame()`:
+
 ```tsx
 const frame = useCurrentFrame();
 const progress = interpolate(frame, [0, 30], [0, 1], { extrapolateRight: "clamp" });
 ```
+
+## Skiper UI components (shadcn-compatible registry)
+
+Skiper is a **shadcn-compatible component registry**. 104 component specs are
+cataloged on disk:
+
+```
+/Users/shashanksaxena/.claude/skills/product-demo-video/skiper-components/skiper001.md
+…
+/Users/shashanksaxena/.claude/skills/product-demo-video/skiper-components/skiper104.md
+```
+
+Each `.md` spec contains: title, URL (`https://skiper-ui.com/v1/skiperNN`),
+install command, import statement, signature, usage example. The `.md` does
+NOT contain the component source — that comes from running `shadcn add`.
+
+Export names are NOT predictable from the number — read the `.md` per component.
+Verified examples:
+
+| spec | export(s) | purpose |
+|------|-----------|---------|
+| `skiper16.md` | `StickyCard_001` | card stack scroll |
+| `skiper17.md` | `StickyCard002`  | card stack with gsap |
+| `skiper27.md` | `RollingText`    | rolling text animation |
+| `skiper31.md` | `Skiper31Demo`   | text scroll animation |
+| `skiper90.md` | `Skiper90`, `SkiperGradiantCard`, `GradiantCardBody`, `GradiantCardTitle` | gradient hover cards |
+
+### Usage recipe (per component, per scene)
+
+```bash
+cd projects/PRODUCT
+
+# 1. Read the spec
+cat ~/.claude/skills/product-demo-video/skiper-components/skiper27.md
+
+# 2. Install via shadcn (writes to src/components/v1/skiper27.tsx)
+npx shadcn add @skiper-ui/skiper27
+```
+
+```tsx
+import { RollingText } from "@/components/v1/skiper27";
+// Props/signature: read from skiper27.md
+```
+
+### Pre-install gate (pdv-build responsibility)
+
+Each Skiper component MUST be installed via shadcn before any TSX can import it.
+pdv-build must:
+1. Decide per scene which Skipers are needed (from the per-scene brief).
+2. Run `npx shadcn add @skiper-ui/skiperNN` for each — in the project root.
+3. Feed the corresponding `.md` spec contents into the Gemini prompt alongside
+   the scene brief, so Gemini sees the real import + signature + example.
+
+Generic "use Skiper" instructions to Gemini WITHOUT inlining the `.md` spec for
+the selected component → Gemini falls back to plain `<div>` + inline styles.
+
+Canonical specs location: `/Users/shashanksaxena/.claude/skills/product-demo-video/skiper-components/`.
+The empty `skills/demopilot/ref/skiper-components/` directory in this repo
+should be deleted (the path above is the source of truth).
+
+Skiper URL pattern (for reference / browsing only):
+`https://skiper-ui.com/v1/skiperN` (NO zero-padding: `/v1/skiper6` not `/v1/skiper006`).
 
 ## Remotion
 
@@ -58,11 +174,22 @@ frames=$(python3 -c "import math; print(math.ceil($dur * 30) + 45)")
 # Use $frames as durationInFrames minimum
 ```
 
-**Ken Burns (prevents static dead-frames):**
+**OffthreadVideo (recording scenes):** NO `transform: scale(...)`. The MP4 has
+been pre-polished by OpenScreen (see next section) with semantic zooms driven
+by cursor coordinates. Layering a Remotion Ken Burns on top produces the
+"screenshot zoom" slop look (see `visual-excellence.md` → "Scene Type Rules").
+
 ```tsx
-const scale = 1 + useCurrentFrame() * 0.0002;
-<OffthreadVideo src={...} startFrom={f(9)} style={{ transform: `scale(${scale})`, objectFit: "cover" }} />
+<OffthreadVideo
+  src={staticFile("recordings/scene04-commits-polished.mp4")}
+  startFrom={f(0)}
+  style={{ objectFit: "cover", width: "100%", height: "100%" }}
+/>
 ```
+
+Apply Ken Burns / scale interpolation **only** on motion-graphic scenes that
+contain a still image and no other motion (rare — most motion graphics already
+have animated content).
 
 **Animated Callout Circles (Wow Moment):**
 ```tsx
@@ -168,13 +295,96 @@ Modern React apps have no `<tbody><tr>` — use `hover-xy` with WebBridge-confir
 { action: 'click-nth', selector: '.group.grid', index: 0 }
 ```
 
-## Gemini CLI (Phase 4A — bulk code generation)
+## OpenScreen CLI (post-recording polish)
+
+`cli-anything-openscreen` v1.0.0 — turns a raw Playwright screen capture into a
+polished MP4 with cursor-position semantic zooms, speed ramps, and annotations.
+Eliminates the need for Remotion Ken Burns on recording scenes
+(see `visual-excellence.md` → "Scene Type Rules").
+
+### Install
 
 ```bash
-# Write all Remotion scene components without Claude context compaction
+uv tool install cli-anything-openscreen
+# binary then available as: cli-anything-openscreen
+```
+
+### Verified subcommands
+
+```
+cli-anything-openscreen project new -v <video> -o <project_file>
+cli-anything-openscreen --project <project_file> zoom add \
+    --start <ms> --end <ms> --focus-x <0-1> --focus-y <0-1> --depth 1-6
+cli-anything-openscreen --project <project_file> speed add \
+    --start <ms> --end <ms> --multiplier <float>
+cli-anything-openscreen --project <project_file> annotation add-text ...
+cli-anything-openscreen --project <project_file> export render <output.mp4>
+```
+
+`--focus-x` and `--focus-y` are normalized 0–1 (divide pixel coordinates by
+frame width/height). `--depth` 1–6 controls zoom intensity (4 is a good default
+for click targets).
+
+### Recipe — polish a Playwright recording with semantic zooms
+
+Inputs:
+- `raw.mp4` — the Playwright capture
+- `interactions.json` — list of `{ t_ms, x_px, y_px, kind: "click" | "hover" }`
+  emitted by the recording script (resolution assumed 1920×1080)
+
+Steps:
+
+```bash
+# 1. Create project from raw video
+cli-anything-openscreen project new -v raw.mp4 -o scene.openscreen
+
+# 2. For each click at (x_px, y_px) at time t_ms — zoom in 400ms before, hold 1.5s after
+#    focus_x = x_px / 1920, focus_y = y_px / 1080
+cli-anything-openscreen --project scene.openscreen zoom add \
+    --start $((t_ms - 400)) --end $((t_ms + 1500)) \
+    --focus-x 0.59 --focus-y 0.50 --depth 4
+
+# 3. For any quiet stretch > 2s with no interaction, speed it up
+cli-anything-openscreen --project scene.openscreen speed add \
+    --start <quiet_start_ms> --end <quiet_end_ms> --multiplier 1.8
+
+# 4. Render the polished MP4
+cli-anything-openscreen --project scene.openscreen export render scene-polished.mp4
+```
+
+Output: `scene-polished.mp4`. Reference this file (NOT `raw.mp4`) from the
+Remotion `<OffthreadVideo>` for the corresponding recording scene.
+
+## Gemini CLI (Phase 4A — bulk code generation)
+
+Before invoking Gemini, pdv-build must:
+1. Read the per-scene brief to decide which remotion-bits + Skiper components are
+   needed for each scene.
+2. `npx remotion-bits fetch <id> --json` each remotion-bits component and write
+   its source into the project at the registry-declared path
+   (e.g. `src/components/AnimatedText.tsx`).
+3. `npx shadcn add @skiper-ui/skiperNN` each Skiper component selected.
+4. Concatenate the chosen Skiper `.md` specs (from
+   `~/.claude/skills/product-demo-video/skiper-components/`) plus the fetched
+   remotion-bits source export signatures into a `components-inventory.md`
+   under the project.
+
+Gemini then receives the inventory file and is told to import from local
+project paths, NOT from `remotion-bits` or `@skiper-ui/...`:
+
+```bash
 gemini -p "@projects/PRODUCT/src/theme.ts @projects/PRODUCT/storyboard/approved.md \
+  @projects/PRODUCT/components-inventory.md \
   Write all 10 Remotion scene TSX files based on the approved storyboard. \
-  Use THEME constants throughout. Use remotion-bits AnimatedText, Typewriter, AnimatedNumber. \
+  Use THEME constants throughout. \
+  Import remotion-bits components from local project paths (e.g. \
+  import { AnimatedText } from '@/components/AnimatedText'), NEVER from the \
+  'remotion-bits' package. \
+  Import Skiper components from their installed shadcn path (e.g. \
+  import { RollingText } from '@/components/v1/skiper27'), NEVER from \
+  '@skiper-ui/...'. \
+  Use ONLY the imports, exports, and signatures present in components-inventory.md \
+  — do not invent props. \
   Output each file as a complete standalone component."
 ```
 

@@ -1,0 +1,11 @@
+{
+  "name": "demopilot",
+  "version": "0.2.0",
+  "description": "Open-source demo video studio for founders. Multi-skill orchestrator: validate → explore → build → render. Real screen recordings with semantic zoom (OpenScreen), shadcn-style component installs (remotion-bits, Skiper), deterministic recording scripts from structured narration.",
+  "author": {
+    "name": "Shashank Saxena"
+  },
+  "homepage": "https://github.com/Shashank2577/demopilot",
+  "repository": "https://github.com/Shashank2577/demopilot",
+  "license": "MIT"
+}
